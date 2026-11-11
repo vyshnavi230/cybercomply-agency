@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CyberComply | Interactive Multi-Agent GRC Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     :root {
       --bg: #0b0f19;
@@ -63,7 +62,7 @@
     .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
     .chart-card h4 { margin-bottom: 1rem; font-size: 1rem; color: var(--muted); }
 
-    /* Client Controls Toolbar */
+    /* Controls Toolbar */
     .toolbar { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; justify-content: space-between; align-items: center; }
     .filter-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .input-search, .select-filter { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 0.5rem 0.8rem; border-radius: 6px; font-size: 0.85rem; }
@@ -198,7 +197,6 @@
   </div>
 
   <script>
-    // Agents definition matching presentation and orchestrator
     const agents = [
       { id: "ag-01", name: "PM Orchestrator", role: "Central Workflow Controller", control: "System Hub", status: "ONLINE", task: "Coordinating multi-agent cycles & compiling executive briefs." },
       { id: "ag-02", name: "IAM Auditor", role: "Identity & Access Control", control: "SOC 2 CC6.2", status: "SCANNING", task: "Auditing directory accounts for inactivity > 60 days." },
@@ -211,4 +209,219 @@
     let auditRecords = [
       { id: "IAM-001", agent: "IAM Auditor", control: "SOC 2 CC6.2", severity: "MEDIUM", status: "OPEN", action: "Revoke dormant accounts inactive > 60 days" },
       { id: "CLD-002", agent: "Cloud Inspector", control: "ISO 27001 A.12.1", severity: "CRITICAL", status: "OPEN", action: "Enable public access block on backup S3 bucket" },
-      { id: "VND-003", agent: "Vendor Evaluator", control: "GDPR Art. 28", severity: "MEDIUM", status: "
+      { id: "VND-003", agent: "Vendor Evaluator", control: "GDPR Art. 28", severity: "MEDIUM", status: "OPEN", action: "Collect executed DPA and standard contractual clauses" },
+      { id: "SEC-004", agent: "Code Hunter", control: "SOC 2 CC7.1", severity: "CRITICAL", status: "OPEN", action: "Rotate leaked AWS credential in CI/CD pipeline" },
+      { id: "QAR-005", agent: "QA Reviewer", control: "Internal Quality Gate", severity: "LOW", status: "RESOLVED", action: "Evidence validated; false-positive checks passed" }
+    ];
+
+    let severityChartInstance = null;
+    let domainChartInstance = null;
+
+    function renderAgentCards() {
+      const grid = document.getElementById("agentGrid");
+      if (!grid) return;
+      grid.innerHTML = agents.map(a => `
+        <div class="agent-card" onclick="selectAgent('${a.id}')" id="${a.id}">
+          <div class="agent-top">
+            <span class="agent-name">${a.name}</span>
+            <span class="badge badge-active"><span class="pulse-scan"></span>${a.status}</span>
+          </div>
+          <div class="agent-role">${a.role} • <code>${a.control}</code></div>
+          <div class="agent-task"><strong>Current Activity:</strong> ${a.task}</div>
+        </div>
+      `).join("");
+    }
+
+    function selectAgent(agentId) {
+      document.querySelectorAll(".agent-card").forEach(c => c.classList.remove("active"));
+      const selected = agents.find(a => a.id === agentId);
+      const cardEl = document.getElementById(agentId);
+      if (cardEl) cardEl.classList.add("active");
+
+      const searchInput = document.getElementById("searchInput");
+      if (searchInput && selected) {
+        searchInput.value = selected.name;
+        applyFilters();
+      }
+
+      if (selected) {
+        addTerminalLog(`[AGENT FOCUS] ${selected.name} selected. Polling live status on ${selected.control}...`);
+      }
+    }
+
+    function addTerminalLog(msg) {
+      const terminal = document.getElementById("terminal");
+      if (!terminal) return;
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement("div");
+      div.className = "terminal-line";
+      div.innerHTML = `<span class="terminal-time">[${time}]</span> ${msg}`;
+      terminal.prepend(div);
+    }
+
+    function applyFilters() {
+      const search = (document.getElementById("searchInput")?.value || "").toLowerCase();
+      const sevFilter = document.getElementById("severityFilter")?.value || "ALL";
+      const statFilter = document.getElementById("statusFilter")?.value || "ALL";
+
+      const filtered = auditRecords.filter(r => {
+        const matchesSearch = Object.values(r).some(v => String(v).toLowerCase().includes(search));
+        const matchesSev = (sevFilter === "ALL" || r.severity.toUpperCase() === sevFilter);
+        const matchesStat = (statFilter === "ALL" || r.status.toUpperCase() === statFilter);
+        return matchesSearch && matchesSev && matchesStat;
+      });
+
+      const tbody = document.getElementById("table-body");
+      if (!tbody) return;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 1.5rem;">No matching audit findings.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(row => {
+        const sevClass = row.severity === "CRITICAL" ? "badge-critical" : row.severity === "MEDIUM" ? "badge-medium" : "badge-low";
+        const actionBtn = row.status === "OPEN" 
+          ? `<button class="btn-action" onclick="resolveFinding('${row.id}')">Resolve Gap</button>` 
+          : `<span style="color: var(--low); font-size: 0.8rem;">✓ Remediated</span>`;
+
+        return `
+          <tr>
+            <td><code>${row.id}</code></td>
+            <td><strong>${row.agent}</strong></td>
+            <td>${row.control}</td>
+            <td><span class="badge ${sevClass}">${row.severity}</span></td>
+            <td>${row.status}</td>
+            <td>${row.action}</td>
+            <td>${actionBtn}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function resolveFinding(id) {
+      const item = auditRecords.find(r => r.id === id);
+      if (item) {
+        item.status = "RESOLVED";
+        addTerminalLog(`[REMEDIATION] Vulnerability ${item.id} marked RESOLVED by compliance officer.`);
+        renderDashboard();
+      }
+    }
+
+    function simulateNewScan() {
+      const newId = "SEC-00" + (auditRecords.length + 1);
+      auditRecords.unshift({
+        id: newId,
+        agent: "Code Hunter",
+        control: "SOC 2 CC7.2",
+        severity: "CRITICAL",
+        status: "OPEN",
+        action: "Unmasked secret detected in latest repository push"
+      });
+      addTerminalLog(`[ALERT] Code Hunter flagged new CRITICAL issue: ${newId} (SOC 2 CC7.2).`);
+      renderDashboard();
+    }
+
+    function updateScorecards() {
+      const total = auditRecords.length;
+      const critical = auditRecords.filter(r => r.severity === "CRITICAL" && r.status === "OPEN").length;
+      const medium = auditRecords.filter(r => r.severity === "MEDIUM" && r.status === "OPEN").length;
+      const readiness = Math.max(65, Math.min(100, Math.round(100 - (critical * 5.8) - (medium * 2.2))));
+
+      const elTotal = document.getElementById("stat-total");
+      const elCrit = document.getElementById("stat-critical");
+      const elMed = document.getElementById("stat-medium");
+      const elReady = document.getElementById("stat-readiness");
+
+      if (elTotal) elTotal.innerText = total;
+      if (elCrit) elCrit.innerText = critical;
+      if (elMed) elMed.innerText = medium;
+      if (elReady) elReady.innerText = `${readiness}%`;
+    }
+
+    function renderCharts() {
+      if (typeof Chart === 'undefined') return;
+
+      const sevCounts = {
+        Critical: auditRecords.filter(r => r.severity === "CRITICAL" && r.status === "OPEN").length,
+        Medium: auditRecords.filter(r => r.severity === "MEDIUM" && r.status === "OPEN").length,
+        Resolved: auditRecords.filter(r => r.status === "RESOLVED").length
+      };
+
+      const domainCounts = {};
+      auditRecords.forEach(r => {
+        const dom = r.control.split(" ")[0];
+        domainCounts[dom] = (domainCounts[dom] || 0) + 1;
+      });
+
+      const sevCanvas = document.getElementById("severityChart");
+      const domCanvas = document.getElementById("domainChart");
+
+      if (sevCanvas) {
+        if (severityChartInstance) severityChartInstance.destroy();
+        severityChartInstance = new Chart(sevCanvas, {
+          type: "doughnut",
+          data: {
+            labels: ["Critical (Open)", "Medium (Open)", "Remediated"],
+            datasets: [{
+              data: [sevCounts.Critical, sevCounts.Medium, sevCounts.Resolved],
+              backgroundColor: ["#ef4444", "#f59e0b", "#10b981"],
+              borderColor: "#111827"
+            }]
+          },
+          options: { plugins: { legend: { labels: { color: "#9ca3af" } } } }
+        });
+      }
+
+      if (domCanvas) {
+        if (domainChartInstance) domainChartInstance.destroy();
+        domainChartInstance = new Chart(domCanvas, {
+          type: "bar",
+          data: {
+            labels: Object.keys(domainCounts),
+            datasets: [{
+              label: "Total Findings",
+              data: Object.values(domainCounts),
+              backgroundColor: "#38bdf8"
+            }]
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: "#9ca3af" }, grid: { display: false } },
+              y: { ticks: { color: "#9ca3af", stepSize: 1 }, grid: { color: "#1f2937" } }
+            }
+          }
+        });
+      }
+    }
+
+    function exportToCSV() {
+      const headers = ["id", "agent", "control", "severity", "status", "action"];
+      const rows = auditRecords.map(r => headers.map(h => `"${r[h] || ''}"`).join(","));
+      const csv = [headers.join(","), ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CyberComply_Audit_Report_${Date.now()}.csv`;
+      a.click();
+    }
+
+    function renderDashboard() {
+      renderAgentCards();
+      applyFilters();
+      updateScorecards();
+      renderCharts();
+      const updatedEl = document.getElementById("last-updated");
+      if (updatedEl) {
+        updatedEl.innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      renderDashboard();
+    });
+  </script>
+</body>
+</html>
