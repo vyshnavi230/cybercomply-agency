@@ -3,163 +3,242 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CyberComply | Autonomous GRC Dashboard</title>
+  <title>CyberComply | Live GRC Audit Dashboard</title>
+  <!-- Chart.js for visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse for clean CSV reading -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     :root {
       --bg: #0b0f19;
-      --card-bg: #111827;
+      --card: #111827;
       --border: #1f2937;
       --accent: #38bdf8;
-      --text-main: #f9fafb;
-      --text-muted: #9ca3af;
-      --badge-high: #ef4444;
-      --badge-med: #f59e0b;
-      --badge-low: #10b981;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --critical: #ef4444;
+      --medium: #f59e0b;
+      --low: #10b981;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text-main); line-height: 1.6; padding: 2rem 1rem; }
-    .container { max-width: 1100px; margin: 0 auto; }
-    
-    header { text-align: center; margin-bottom: 2.5rem; }
-    header h1 { font-size: 2.5rem; color: var(--accent); margin-bottom: 0.5rem; }
-    header p { color: var(--text-muted); font-size: 1.1rem; }
-    .meta-tag { display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; background: #1e293b; color: #94a3b8; padding: 0.2rem 0.8rem; border-radius: 9999px; }
+    body { background: var(--bg); color: var(--text); padding: 2rem 1rem; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 2rem; }
+    header h1 { font-size: 2.4rem; color: var(--accent); }
+    header p { color: var(--muted); margin-top: 0.25rem; font-size: 1rem; }
+    .meta-tag { display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; background: #1e293b; color: #94a3b8; padding: 0.25rem 0.8rem; border-radius: 999px; }
 
-    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
-    .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
-    .stat-card h3 { font-size: 2rem; color: var(--accent); margin-bottom: 0.25rem; }
-    .stat-card span { color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-banner { display: flex; align-items: center; justify-content: space-between; background: #0f172a; border: 1px solid var(--border); padding: 0.75rem 1.25rem; border-radius: 8px; margin-bottom: 2rem; font-size: 0.9rem; }
+    .live-dot { display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 6px; box-shadow: 0 0 8px #10b981; }
 
-    .section-title { font-size: 1.4rem; margin-bottom: 1rem; color: var(--text-main); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-    
-    .table-container { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; margin-bottom: 2.5rem; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
-    th, td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); }
-    th { background: #0f172a; color: var(--text-muted); font-weight: 600; }
+    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; text-align: center; }
+    .stat-card h3 { font-size: 2rem; color: var(--accent); }
+    .stat-card span { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .chart-section { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+    @media (max-width: 768px) { .chart-section { grid-template-columns: 1fr; } }
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+    .chart-card h4 { margin-bottom: 1rem; font-size: 1rem; color: var(--muted); }
+
+    .table-container { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; margin-bottom: 2rem; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+    th, td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+    th { background: #0f172a; color: var(--muted); font-weight: 600; white-space: nowrap; }
     tr:last-child td { border-bottom: none; }
-    
-    .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-    .badge-critical { background: rgba(239, 68, 68, 0.2); color: var(--badge-high); }
-    .badge-medium { background: rgba(245, 158, 11, 0.2); color: var(--badge-med); }
-    .badge-low { background: rgba(16, 185, 129, 0.2); color: var(--badge-low); }
 
-    .architecture { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 2.5rem; }
-    .architecture ul { list-style: none; padding-left: 0; }
-    .architecture li { margin-bottom: 0.75rem; padding-left: 1.5rem; position: relative; }
-    .architecture li::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
+    .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem; display: inline-block; }
+    .badge-critical, .badge-high { background: rgba(239, 68, 68, 0.2); color: var(--critical); }
+    .badge-medium { background: rgba(245, 158, 11, 0.2); color: var(--medium); }
+    .badge-low { background: rgba(16, 185, 129, 0.2); color: var(--low); }
 
-    .actions { display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
-    .btn { display: inline-block; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.95rem; transition: background 0.2s; }
+    .btn-group { display: flex; justify-content: center; gap: 1rem; margin-top: 1.5rem; }
+    .btn { padding: 0.6rem 1.2rem; border-radius: 6px; text-decoration: none; font-size: 0.9rem; font-weight: 600; }
     .btn-primary { background: var(--accent); color: #0b0f19; }
-    .btn-secondary { background: #1e293b; color: var(--text-main); border: 1px solid var(--border); }
-    .btn:hover { opacity: 0.9; }
-
-    footer { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 3rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+    .btn-secondary { background: #1e293b; color: var(--text); border: 1px solid var(--border); }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>CyberComply</h1>
-      <p>Autonomous Continuous Compliance & Governance Orchestration Engine</p>
+      <p>Autonomous Continuous Compliance Audit Ledger & Operations Dashboard</p>
       <div class="meta-tag">Presenter: Vyshnavi Prakash | Programming in Data Science</div>
     </header>
 
+    <div class="status-banner">
+      <div><span class="live-dot"></span> <strong>Live Cloud Ledger:</strong> Connected to Google Sheets API</div>
+      <div id="last-updated" style="color: var(--muted);">Syncing...</div>
+    </div>
+
     <div class="grid-stats">
       <div class="stat-card">
-        <h3>88.4%</h3>
-        <span>Audit Readiness</span>
+        <h3 id="stat-total">0</h3>
+        <span>Total Findings Logged</span>
       </div>
       <div class="stat-card">
-        <h3>5</h3>
-        <span>Active Audit Checks</span>
+        <h3 id="stat-critical" style="color: var(--critical);">0</h3>
+        <span>Critical / High Risks</span>
       </div>
       <div class="stat-card">
-        <h3>100%</h3>
-        <span>Ledger Sync</span>
+        <h3 id="stat-medium" style="color: var(--medium);">0</h3>
+        <span>Medium Severity</span>
       </div>
       <div class="stat-card">
-        <h3>TLS/SSL</h3>
-        <span>Reporting Pipeline</span>
+        <h3 id="stat-readiness">--%</h3>
+        <span>SOC 2 Readiness</span>
       </div>
     </div>
 
-    <h2 class="section-title">Automated Compliance Findings Ledger</h2>
+    <div class="chart-section">
+      <div class="chart-card">
+        <h4>Findings by Severity</h4>
+        <canvas id="severityChart" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>Findings by Compliance Domain</h4>
+        <canvas id="domainChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <h3 style="margin-bottom: 0.75rem; font-size: 1.2rem;">Live Audit Trail</h3>
     <div class="table-container">
-      <table>
+      <table id="audit-table">
         <thead>
-          <tr>
-            <th>ID</th>
-            <th>Inspection Agent</th>
-            <th>Control Framework</th>
-            <th>Severity</th>
-            <th>Status</th>
-            <th>Recommended Action</th>
+          <tr id="table-head">
+            <th>Loading live sheet ledger...</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <td><code>IAM-001</code></td>
-            <td>IAM Auditor</td>
-            <td>SOC 2 CC6.2</td>
-            <td><span class="badge badge-medium">MEDIUM</span></td>
-            <td>OPEN</td>
-            <td>Revoke dormant accounts inactive &gt; 60 days</td>
-          </tr>
-          <tr>
-            <td><code>CLD-002</code></td>
-            <td>Cloud Inspector</td>
-            <td>ISO 27001 A.12.1</td>
-            <td><span class="badge badge-critical">CRITICAL</span></td>
-            <td>OPEN</td>
-            <td>Enable public access block on backup S3 bucket</td>
-          </tr>
-          <tr>
-            <td><code>VND-003</code></td>
-            <td>Vendor Evaluator</td>
-            <td>GDPR Art. 28</td>
-            <td><span class="badge badge-medium">MEDIUM</span></td>
-            <td>IN_PROGRESS</td>
-            <td>Collect executed DPA and standard contractual clauses</td>
-          </tr>
-          <tr>
-            <td><code>SEC-004</code></td>
-            <td>Code Hunter</td>
-            <td>SOC 2 CC7.1</td>
-            <td><span class="badge badge-critical">CRITICAL</span></td>
-            <td>OPEN</td>
-            <td>Rotate leaked AWS credential in CI/CD pipeline</td>
-          </tr>
-          <tr>
-            <td><code>QAR-005</code></td>
-            <td>QA Reviewer</td>
-            <td>Internal Quality Gate</td>
-            <td><span class="badge badge-low">LOW</span></td>
-            <td>RESOLVED</td>
-            <td>Evidence validated; false-positive checks passed</td>
-          </tr>
-        </tbody>
+        <tbody id="table-body"></tbody>
       </table>
     </div>
 
-    <h2 class="section-title">Autonomous Architecture Highlights</h2>
-    <div class="architecture">
-      <ul>
-        <li><strong>Multi-Agent Orchestration:</strong> The central <code>pm_orchestrator.py</code> executes simulated specialized domain inspection tasks.</li>
-        <li><strong>Server-to-Server Authentication:</strong> Headless ledger updates handled through a Google Cloud Service Account with <code>gspread</code>.</li>
-        <li><strong>Automated Briefings:</strong> Formatted HTML email summaries dispatched via Gmail SMTP (STARTTLS on port 587).</li>
-        <li><strong>Secret Isolation:</strong> Multi-tiered configuration protection via <code>.gitignore</code> and reproducible <code>.env.example</code> templates.</li>
-      </ul>
+    <div class="btn-group">
+      <a href="https://github.com/vyshnavi230/cybercomply-agency" class="btn btn-primary" target="_blank">View GitHub Repo</a>
+      <a href="https://docs.google.com/spreadsheets/d/1d--FTUEIcsww8zVGGBsJW6njYz5wHgBJ8nIOc9W1VOU/edit" class="btn btn-secondary" target="_blank">Open Google Sheet</a>
     </div>
-
-    <div class="actions">
-      <a href="https://github.com/vyshnavi230/cybercomply-agency" class="btn btn-primary" target="_blank">View GitHub Repository</a>
-      <a href="https://docs.google.com/spreadsheets/d/1d--FTUEIcsww8zVGGBsJW6njYz5wHgBJ8nIOc9W1VOU/edit" class="btn btn-secondary" target="_blank">View Google Sheet Ledger</a>
-    </div>
-
-    <footer>
-      <p>CyberComply Autonomous GRC Systems &copy; 2026 Vyshnavi Prakash</p>
-    </footer>
   </div>
+
+  <script>
+    // Paste your Published Google Sheet CSV URL here
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSNLHq-dnuChYZEQ-DbrrETbt4Ba8TpDmzJM4xrDnWiIWFoazP4woG8PgFrovgD9LjviHdyMZ5aO13P/pub?output=csv";
+
+    async function loadDashboard() {
+      if (CSV_URL.includes("https://docs.google.com/spreadsheets/d/e/2PACX-1vSNLHq-dnuChYZEQ-DbrrETbt4Ba8TpDmzJM4xrDnWiIWFoazP4woG8PgFrovgD9LjviHdyMZ5aO13P/pub?output=csv")) {
+        document.getElementById("last-updated").innerText = "Please configure CSV_URL in index.html";
+        return;
+      }
+
+      Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          const data = results.data;
+          if (!data || data.length === 0) return;
+
+          document.getElementById("last-updated").innerText = `Last Refreshed: ${new Date().toLocaleTimeString()}`;
+          renderTable(data);
+          calculateStats(data);
+          renderCharts(data);
+        },
+        error: function(err) {
+          console.error("Error reading CSV:", err);
+          document.getElementById("last-updated").innerText = "Failed to sync with Google Sheet.";
+        }
+      });
+    }
+
+    function renderTable(data) {
+      const headers = Object.keys(data[0]);
+      const thead = document.getElementById("table-head");
+      thead.innerHTML = headers.map(h => `<th>${h}</th>`).join("");
+
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = data.map(row => {
+        return `<tr>` + headers.map(h => {
+          const val = row[h] || "";
+          if (h.toLowerCase().includes("severity")) {
+            const cls = val.toLowerCase().includes("crit") ? "badge-critical" 
+                      : val.toLowerCase().includes("med") ? "badge-medium" : "badge-low";
+            return `<td><span class="badge ${cls}">${val}</span></td>`;
+          }
+          return `<td>${val}</td>`;
+        }).join("") + `</tr>`;
+      }).join("");
+    }
+
+    function calculateStats(data) {
+      const total = data.length;
+      let critical = 0;
+      let medium = 0;
+
+      data.forEach(r => {
+        const sev = JSON.stringify(r).toUpperCase();
+        if (sev.includes("CRITICAL") || sev.includes("HIGH")) critical++;
+        else if (sev.includes("MEDIUM")) medium++;
+      });
+
+      document.getElementById("stat-total").innerText = total;
+      document.getElementById("stat-critical").innerText = critical;
+      document.getElementById("stat-medium").innerText = medium;
+
+      // Realistic readiness score based on findings count and severity
+      const readiness = Math.max(70, Math.round(100 - (critical * 4) - (medium * 1.5)));
+      document.getElementById("stat-readiness").innerText = `${readiness}%`;
+    }
+
+    function renderCharts(data) {
+      let severities = { Critical: 0, Medium: 0, Low: 0 };
+      let domains = {};
+
+      data.forEach(row => {
+        const text = JSON.stringify(row).toUpperCase();
+        if (text.includes("CRITICAL") || text.includes("HIGH")) severities.Critical++;
+        else if (text.includes("MEDIUM")) severities.Medium++;
+        else severities.Low++;
+
+        // Framework / Domain grouping
+        const domain = row["Control Framework"] || row["Framework_Control"] || row["Domain"] || "General Audit";
+        domains[domain] = (domains[domain] || 0) + 1;
+      });
+
+      // Severity Doughnut Chart
+      new Chart(document.getElementById("severityChart"), {
+        type: "doughnut",
+        data: {
+          labels: Object.keys(severities),
+          datasets: [{
+            data: Object.values(severities),
+            backgroundColor: ["#ef4444", "#f59e0b", "#10b981"],
+            borderColor: "#111827"
+          }]
+        },
+        options: { plugins: { legend: { labels: { color: "#9ca3af" } } } }
+      });
+
+      // Domain Bar Chart
+      new Chart(document.getElementById("domainChart"), {
+        type: "bar",
+        data: {
+          labels: Object.keys(domains),
+          datasets: [{
+            label: "Findings",
+            data: Object.values(domains),
+            backgroundColor: "#38bdf8"
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#9ca3af" }, grid: { display: false } },
+            y: { ticks: { color: "#9ca3af", stepSize: 1 }, grid: { color: "#1f2937" } }
+          }
+        }
+      });
+    }
+
+    loadDashboard();
+  </script>
 </body>
 </html>
