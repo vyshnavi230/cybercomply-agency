@@ -455,4 +455,220 @@
       const div = document.createElement("div");
       div.className = "terminal-line";
       div.innerHTML = `<span class="terminal-time">[${time}]</span> ${msg}`;
-      terminal.
+      terminal.appendChild(div);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function renderTable(records) {
+      const tbody = document.getElementById("table-body");
+      if (!tbody) return;
+
+      tbody.innerHTML = records.map(r => {
+        const sevClass = r.severity === 'CRITICAL' ? 'badge-critical' : (r.severity === 'MEDIUM' ? 'badge-medium' : 'badge-low');
+        const isResolved = r.status === 'RESOLVED';
+        const statusBadge = isResolved ? 'badge-low' : (r.severity === 'CRITICAL' ? 'badge-critical' : 'badge-medium');
+
+        return `
+          <tr>
+            <td><code>${r.id}</code></td>
+            <td><strong>${r.agent}</strong></td>
+            <td><code>${r.control}</code></td>
+            <td><span class="badge ${sevClass}">${r.severity}</span></td>
+            <td><span class="badge ${statusBadge}">${r.status}</span></td>
+            <td>${r.action}</td>
+            <td>
+              ${isResolved 
+                ? '<span style="color: var(--muted); font-size: 0.85rem;">Resolved ✓</span>' 
+                : `<button class="btn-action" onclick="resolveFinding('${r.id}')">Resolve</button>`}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function updateKPIs() {
+      const total = auditRecords.length;
+      const openCritical = auditRecords.filter(r => r.severity === 'CRITICAL' && r.status === 'OPEN').length;
+      const openMedium = auditRecords.filter(r => r.severity === 'MEDIUM' && r.status === 'OPEN').length;
+      const resolved = auditRecords.filter(r => r.status === 'RESOLVED').length;
+
+      document.getElementById("stat-total").innerText = total;
+      document.getElementById("stat-critical").innerText = openCritical;
+      document.getElementById("stat-medium").innerText = openMedium;
+
+      // Readiness score calculation based on total resolved vs open risk weight
+      const score = total === 0 ? 100 : Math.max(0, Math.round(((resolved + (total - openCritical * 2 - openMedium) * 0.5) / total) * 100));
+      document.getElementById("stat-readiness").innerText = `${Math.min(100, score)}%`;
+
+      const lastUpdated = document.getElementById("last-updated");
+      if (lastUpdated) {
+        lastUpdated.innerText = `Updated ${new Date().toLocaleTimeString()}`;
+      }
+    }
+
+    function resolveFinding(id) {
+      const finding = auditRecords.find(r => r.id === id);
+      if (finding) {
+        finding.status = "RESOLVED";
+        addTerminalLog(`[REMEDIATION] Finding ${id} (${finding.agent}) marked as RESOLVED.`);
+        applyFilters();
+        updateKPIs();
+        updateCharts();
+      }
+    }
+
+    function applyFilters() {
+      const query = (document.getElementById("searchInput")?.value || "").toLowerCase();
+      const sevFilter = document.getElementById("severityFilter")?.value || "ALL";
+      const statusFilter = document.getElementById("statusFilter")?.value || "ALL";
+
+      const filtered = auditRecords.filter(r => {
+        const matchesQuery = 
+          r.id.toLowerCase().includes(query) ||
+          r.agent.toLowerCase().includes(query) ||
+          r.control.toLowerCase().includes(query) ||
+          r.action.toLowerCase().includes(query);
+
+        const matchesSev = sevFilter === "ALL" || r.severity === sevFilter;
+        const matchesStatus = statusFilter === "ALL" || r.status === statusFilter;
+
+        return matchesQuery && matchesSev && matchesStatus;
+      });
+
+      renderTable(filtered);
+    }
+
+    function initCharts() {
+      const ctxSev = document.getElementById('severityChart').getContext('2d');
+      const ctxDom = document.getElementById('domainChart').getContext('2d');
+
+      severityChartInstance = new Chart(ctxSev, {
+        type: 'doughnut',
+        data: getSeverityChartData(),
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans' } } }
+          }
+        }
+      });
+
+      domainChartInstance = new Chart(ctxDom, {
+        type: 'bar',
+        data: getDomainChartData(),
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    function getSeverityChartData() {
+      const criticalCount = auditRecords.filter(r => r.severity === 'CRITICAL').length;
+      const mediumCount = auditRecords.filter(r => r.severity === 'MEDIUM').length;
+      const lowCount = auditRecords.filter(r => r.severity === 'LOW').length;
+
+      return {
+        labels: ['Critical', 'Medium', 'Low'],
+        datasets: [{
+          data: [criticalCount, mediumCount, lowCount],
+          backgroundColor: ['#ff3366', '#f59e0b', '#10b981'],
+          borderWidth: 0
+        }]
+      };
+    }
+
+    function getDomainChartData() {
+      const frameworkCounts = {};
+      auditRecords.forEach(r => {
+        const fw = r.control.split(' ')[0] || "Other";
+        frameworkCounts[fw] = (frameworkCounts[fw] || 0) + 1;
+      });
+
+      return {
+        labels: Object.keys(frameworkCounts),
+        datasets: [{
+          label: 'Findings Count',
+          data: Object.values(frameworkCounts),
+          backgroundColor: '#38bdf8',
+          borderRadius: 6
+        }]
+      };
+    }
+
+    function updateCharts() {
+      if (severityChartInstance) {
+        severityChartInstance.data = getSeverityChartData();
+        severityChartInstance.update();
+      }
+      if (domainChartInstance) {
+        domainChartInstance.data = getDomainChartData();
+        domainChartInstance.update();
+      }
+    }
+
+    function simulateNewScan() {
+      const templates = [
+        { agent: "Cloud Inspector", control: "ISO 27001 A.10.1", severity: "CRITICAL", action: "Unencrypted EBS volume detected in production zone" },
+        { agent: "IAM Auditor", control: "SOC 2 CC6.1", severity: "MEDIUM", action: "Service account with wildcard IAM permissions detected" },
+        { agent: "Code Hunter", control: "SOC 2 CC7.1", severity: "CRITICAL", action: "Exposed API gateway secret detected in commit history" },
+        { agent: "Vendor Evaluator", control: "GDPR Art. 32", severity: "LOW", action: "Subprocessor security whitepaper renewal required" }
+      ];
+
+      const template = templates[Math.floor(Math.random() * templates.length)];
+      const newId = `AUD-${Math.floor(100 + Math.random() * 900)}`;
+
+      const newRecord = {
+        id: newId,
+        agent: template.agent,
+        control: template.control,
+        severity: template.severity,
+        status: "OPEN",
+        action: template.action
+      };
+
+      auditRecords.unshift(newRecord);
+      addTerminalLog(`[AGENT SCAN] ${template.agent} surfaced finding ${newId} (${template.severity}) on ${template.control}.`);
+      applyFilters();
+      updateKPIs();
+      updateCharts();
+    }
+
+    function exportToCSV() {
+      const headers = ["ID", "Agent", "Control", "Severity", "Status", "Action"];
+      const rows = auditRecords.map(r => [
+        `"${r.id}"`,
+        `"${r.agent}"`,
+        `"${r.control}"`,
+        `"${r.severity}"`,
+        `"${r.status}"`,
+        `"${r.action.replace(/"/g, '""')}"`
+      ]);
+
+      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `cybercomply_audit_ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      addTerminalLog(`[EXPORT] Compliance records successfully downloaded as CSV.`);
+    }
+
+    // Startup initialization
+    window.addEventListener("DOMContentLoaded", () => {
+      renderAgentCards();
+      applyFilters();
+      updateKPIs();
+      initCharts();
+    });
+  </script>
+</body>
+</html>
