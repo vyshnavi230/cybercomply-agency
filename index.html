@@ -240,4 +240,219 @@
     .badge-critical { background: rgba(255, 51, 102, 0.15); color: var(--critical); border: 1px solid rgba(255, 51, 102, 0.3); }
     .badge-medium { background: rgba(245, 158, 11, 0.15); color: var(--medium); border: 1px solid rgba(245, 158, 11, 0.3); }
     .badge-low { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-online { background: rgba(56, 189, 248, 0.
+    .badge-online { background: rgba(56, 189, 248, 0.12); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-scanning { background: rgba(168, 85, 247, 0.15); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-gradient {
+      background: var(--accent-gradient);
+      color: #04060a;
+      box-shadow: 0 4px 15px rgba(0, 242, 254, 0.25);
+    }
+    .btn-gradient:hover {
+      box-shadow: 0 6px 20px rgba(0, 242, 254, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(30, 41, 59, 0.8);
+      color: #fff;
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover { background: #1e293b; border-color: var(--accent); }
+    .btn-action {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-action:hover { background: var(--accent); color: #04060a; }
+
+    .btn-group { display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>CyberComply</h1>
+      <p>Autonomous Continuous Compliance Audit Ledger & Real-Time Orchestration Center</p>
+      <div class="meta-tag">
+        <span>●</span> Presenter: Vyshnavi Prakash | Programming in Data Science
+      </div>
+    </header>
+
+    <div class="status-banner">
+      <div><span class="pulse-dot"></span> <strong>Multi-Agent State:</strong> 6 Autonomous Inspection Nodes Active</div>
+      <div id="last-updated" style="color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">Syncing live state...</div>
+    </div>
+
+    <!-- Live KPI Scorecards -->
+    <div class="grid-stats">
+      <div class="stat-card">
+        <h3 id="stat-total" style="color: var(--accent);">0</h3>
+        <span>Total Findings Logged</span>
+      </div>
+      <div class="stat-card">
+        <h3 id="stat-critical" style="color: var(--critical);">0</h3>
+        <span>Open Critical Risks</span>
+      </div>
+      <div class="stat-card">
+        <h3 id="stat-medium" style="color: var(--medium);">0</h3>
+        <span>Open Medium Severity</span>
+      </div>
+      <div class="stat-card">
+        <h3 id="stat-readiness" style="color: var(--success);">--%</h3>
+        <span>Audit Readiness Score</span>
+      </div>
+    </div>
+
+    <!-- Interactive Agent Squad -->
+    <div class="section-header">
+      <div class="section-title">Autonomous Agent Squad</div>
+      <div class="section-subtitle">Click an agent card to inspect real-time telemetry</div>
+    </div>
+    <div class="agent-grid" id="agentGrid"></div>
+
+    <!-- Telemetry Log Terminal -->
+    <div class="section-header">
+      <div class="section-title">Live Telemetry Terminal</div>
+    </div>
+    <div class="terminal-box" id="terminal">
+      <div class="terminal-line"><span class="terminal-time">[SYS INIT]</span> CyberComply Core Orchestration Engine loaded. Node status: NORMAL.</div>
+    </div>
+
+    <!-- Visual Analytics -->
+    <div class="chart-section">
+      <div class="chart-card">
+        <h4>Severity Breakdown</h4>
+        <canvas id="severityChart" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>Compliance Framework Distribution</h4>
+        <canvas id="domainChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- Client Controls Toolbar -->
+    <div class="toolbar">
+      <div class="filter-group">
+        <input type="text" id="searchInput" class="input-search" placeholder="Search findings, agents, controls..." oninput="applyFilters()" />
+        <select id="severityFilter" class="select-filter" onchange="applyFilters()">
+          <option value="ALL">All Severities</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="LOW">Low</option>
+        </select>
+        <select id="statusFilter" class="select-filter" onchange="applyFilters()">
+          <option value="ALL">All Statuses</option>
+          <option value="OPEN">Open Only</option>
+          <option value="RESOLVED">Resolved Only</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <button class="btn btn-secondary" onclick="simulateNewScan()">+ Trigger Agent Check</button>
+        <button class="btn btn-secondary" onclick="exportToCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <!-- Interactive Audit Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Inspector Agent</th>
+            <th>Control Framework</th>
+            <th>Severity</th>
+            <th>Status</th>
+            <th>Recommended Action</th>
+            <th>Remediation</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+
+    <div class="btn-group">
+      <a href="https://github.com/vyshnavi230/cybercomply-agency" class="btn btn-gradient" target="_blank">View GitHub Repo</a>
+      <a href="https://docs.google.com/spreadsheets/d/1d--FTUEIcsww8zVGGBsJW6njYz5wHgBJ8nIOc9W1VOU/edit" class="btn btn-secondary" target="_blank">View Sheet Ledger</a>
+    </div>
+  </div>
+
+  <script>
+    const agents = [
+      { id: "ag-01", name: "PM Orchestrator", role: "Central Workflow Controller", control: "System Hub", status: "ONLINE", badgeCls: "badge-online", task: "Coordinating multi-agent cycles & compiling executive briefs." },
+      { id: "ag-02", name: "IAM Auditor", role: "Identity & Access Control", control: "SOC 2 CC6.2", status: "SCANNING", badgeCls: "badge-scanning", task: "Auditing directory accounts for inactivity > 60 days." },
+      { id: "ag-03", name: "Cloud Inspector", role: "Infrastructure Configuration", control: "ISO 27001 A.12.1", status: "ONLINE", badgeCls: "badge-online", task: "Inspecting S3 buckets for open public read permissions." },
+      { id: "ag-04", name: "Vendor Evaluator", role: "Third-Party Data Governance", control: "GDPR Art. 28", status: "SCANNING", badgeCls: "badge-scanning", task: "Validating cross-border Data Processing Agreements (DPA)." },
+      { id: "ag-05", name: "Code Hunter", role: "Static Code Analysis (SAST)", control: "SOC 2 CC7.1", status: "SCANNING", badgeCls: "badge-scanning", task: "Hunting for hardcoded access tokens in repository commits." },
+      { id: "ag-06", name: "QA Reviewer", role: "False-Positive Gatekeeper", control: "Verification Gate", status: "ONLINE", badgeCls: "badge-online", task: "Enforcing deterministic evidence criteria on all logged gaps." }
+    ];
+
+    let auditRecords = [
+      { id: "IAM-001", agent: "IAM Auditor", control: "SOC 2 CC6.2", severity: "MEDIUM", status: "OPEN", action: "Revoke dormant accounts inactive > 60 days" },
+      { id: "CLD-002", agent: "Cloud Inspector", control: "ISO 27001 A.12.1", severity: "CRITICAL", status: "OPEN", action: "Enable public access block on backup S3 bucket" },
+      { id: "VND-003", agent: "Vendor Evaluator", control: "GDPR Art. 28", severity: "MEDIUM", status: "OPEN", action: "Collect executed DPA and standard contractual clauses" },
+      { id: "SEC-004", agent: "Code Hunter", control: "SOC 2 CC7.1", severity: "CRITICAL", status: "OPEN", action: "Rotate leaked AWS credential in CI/CD pipeline" },
+      { id: "QAR-005", agent: "QA Reviewer", control: "Internal Quality Gate", severity: "LOW", status: "RESOLVED", action: "Evidence validated; false-positive checks passed" }
+    ];
+
+    let severityChartInstance = null;
+    let domainChartInstance = null;
+
+    function renderAgentCards() {
+      const grid = document.getElementById("agentGrid");
+      if (!grid) return;
+      grid.innerHTML = agents.map(a => `
+        <div class="agent-card" onclick="selectAgent('${a.id}')" id="${a.id}">
+          <div class="agent-header">
+            <span class="agent-name">${a.name}</span>
+            <span class="badge ${a.badgeCls}">${a.status}</span>
+          </div>
+          <div class="agent-role">${a.role} • <code>${a.control}</code></div>
+          <div class="agent-task"><strong>Active Task:</strong> ${a.task}</div>
+        </div>
+      `).join("");
+    }
+
+    function selectAgent(agentId) {
+      document.querySelectorAll(".agent-card").forEach(c => c.classList.remove("active"));
+      const selected = agents.find(a => a.id === agentId);
+      const cardEl = document.getElementById(agentId);
+      if (cardEl) cardEl.classList.add("active");
+
+      const searchInput = document.getElementById("searchInput");
+      if (searchInput && selected) {
+        searchInput.value = selected.name;
+        applyFilters();
+      }
+
+      if (selected) {
+        addTerminalLog(`[AGENT FOCUS] ${selected.name} selected. Polling live status on ${selected.control}...`);
+      }
+    }
+
+    function addTerminalLog(msg) {
+      const terminal = document.getElementById("terminal");
+      if (!terminal) return;
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement("div");
+      div.className = "terminal-line";
+      div.innerHTML = `<span class="terminal-time">[${time}]</span> ${msg}`;
+      terminal.
